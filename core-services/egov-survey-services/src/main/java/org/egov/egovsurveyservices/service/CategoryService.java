@@ -36,6 +36,9 @@ public class CategoryService {
 
     public CategoryResponse createCategory(CategoryRequest categoryRequest) {
         RequestInfo requestInfo = categoryRequest.getRequestInfo();
+        if (categoryRequest.getCategories().size() > applicationProperties.getMaxCreateLimit()) {
+            throw new IllegalArgumentException("Maximum " + applicationProperties.getMaxCreateLimit() + " categories allowed per request.");
+        }
         categoryRequest.getCategories().forEach(category -> {
             boolean categoryUnique = categoryValidator.isCategoryUnique(category);
             if (!categoryUnique) {

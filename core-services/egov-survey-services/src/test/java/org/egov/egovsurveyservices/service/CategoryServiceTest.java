@@ -16,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -55,6 +56,7 @@ public class CategoryServiceTest {
 
     @Test
     public void testCreateCategory_Success() {
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
         Category category = Category.builder()
                 .label("Test Category")
                 .tenantId("default")
@@ -79,8 +81,10 @@ public class CategoryServiceTest {
 
     @Test
     public void testCreateCategory_NonUniqueLabel() {
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
+
         Category category = Category.builder()
-                .label("Existing Label") // Existing label
+                .label("Existing Label")
                 .tenantId("default")
                 .isActive(true)
                 .build();
@@ -379,5 +383,52 @@ public class CategoryServiceTest {
         RuntimeException thrown = assertThrows(CustomException.class,()->categoryService.searchCategory(criteria));
 
         assertEquals(thrown.getMessage(),"either an id or a tenant id is required");
+    }
+
+    @Test
+    public void testCreateCategories_Success_WithinLimit() {
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
+        List<Category> categories = createCategories(5);
+        when(categoryValidator.isCategoryUnique(any(Category.class))).
+                thenReturn(true);
+        CategoryRequest categoryRequest = CategoryRequest.builder()
+                .requestInfo(requestInfo)
+                .categories(categories)
+                .build();
+        CategoryResponse createdCategories = categoryService.createCategory(categoryRequest);
+
+        List<Category> categoriesList = createdCategories.getCategories();
+        assertEquals(categories.size(), categoriesList.size());
+        for (int i = 0; i < categories.size(); i++) {
+            assertEquals(categories.get(i).getId(), categoriesList.get(i).getId());
+        }
+    }
+
+    @Test
+    public void testCreateCategories_Failure_ExceedsLimit() {
+        List<Category> categories = createCategories(6);
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
+        CategoryRequest categoryRequest = CategoryRequest.builder()
+                .requestInfo(requestInfo)
+                .categories(categories)
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> categoryService.createCategory(categoryRequest));
+    }
+
+    private List<Category> createCategories(int count) {
+        List<Category> categories = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            categories.add(createCategory("category" + i));
+        }
+        return categories;
+    }
+
+    private Category createCategory(String id) {
+        return Category.builder()
+                .id(id)
+                .tenantId("default")
+                .label("Category " + id)
+                .isActive(true)
+                .build();
     }
 }

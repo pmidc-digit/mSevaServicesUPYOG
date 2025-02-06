@@ -9,6 +9,7 @@ import org.egov.egovsurveyservices.repository.QuestionRepository;
 import org.egov.egovsurveyservices.validators.QuestionValidator;
 import org.egov.egovsurveyservices.web.models.*;
 import org.egov.egovsurveyservices.web.models.enums.Status;
+import org.egov.egovsurveyservices.web.models.enums.Type;
 import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,7 @@ class QuestionServiceTest {
 
     @Test
     public void testCreateQuestionSuccess() {
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
         Question question = Question.builder()
                 .questionStatement("Test Question")
                 .build();
@@ -76,6 +78,7 @@ class QuestionServiceTest {
 
     @Test
     public void testCreateQuestionWithOptions() {
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
         Question question = Question.builder()
                 .questionStatement("Test Question")
                 .options(Arrays.asList("Option 1", "Option 2"))
@@ -102,7 +105,7 @@ class QuestionServiceTest {
                 .requestInfo(requestInfo)
                 .questions(questions)
                 .build();
-
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
         when(applicationProperties.getSaveQuestionTopic()).thenReturn("test-topic");
         QuestionResponse response = questionService.createQuestion(questionRequest);
         assertEquals(Collections.singletonList("NA"), response.getQuestions().get(0).getOptions());
@@ -264,5 +267,49 @@ class QuestionServiceTest {
                 .build();
 
         assertThrows(IllegalArgumentException.class, () -> questionService.searchQuestion(criteria));
+    }
+
+    @Test
+    public void testCreateQuestions_Success_WithinLimit() {
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
+        List<Question> questions = createQuestions(5);
+        QuestionRequest request = QuestionRequest.builder().questions(questions).requestInfo(requestInfo).build();
+        QuestionResponse questionResponse = questionService.createQuestion(request);
+
+        List<Question> questionsList = questionResponse.getQuestions();
+        assertEquals(questions.size(), questionsList.size());
+        for (int i = 0; i < questions.size(); i++) {
+            assertEquals(questions.get(i).getUuid(), questionsList.get(i).getUuid());
+        }
+    }
+
+    @Test
+    public void testCreateQuestions_Failure_ExceedsLimit() {
+        List<Question> questions = createQuestions(6);
+        when(applicationProperties.getMaxCreateLimit()).thenReturn(5);
+        QuestionRequest request = QuestionRequest.builder().questions(questions).requestInfo(requestInfo).build();
+        assertThrows(IllegalArgumentException.class, () -> questionService.createQuestion(request));
+    }
+
+    private List<Question> createQuestions(int count) {
+        List<Question> questions = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            questions.add(createQuestion("question" + i, "category" + i));
+        }
+        return questions;
+    }
+
+    private Question createQuestion(String uuid, String categoryId) {
+        return Question.builder()
+                .uuid(uuid)
+                .tenantId("default")
+                .surveyId("survey123")
+                .questionStatement("Test Question")
+                .status(Status.ACTIVE)
+                .options(Arrays.asList("Option 1", "Option 2"))
+                .type(Type.MULTIPLE_ANSWER_TYPE)
+                .required(true)
+                .categoryId(categoryId)
+                .build();
     }
 }
